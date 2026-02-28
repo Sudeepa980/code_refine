@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CodeRefine | AI-Powered Code Engine</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+
+<style>
+body { background:#020617; color:#f8fafc; font-family:'Inter',sans-serif; min-height:100vh; }
+.glass{background:rgba(15,23,42,0.7);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.1);}
+.glass-card{background:rgba(30,41,59,0.5);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.05);transition:all 0.3s;}
+.glass-card:hover{border-color:rgba(99,102,241,0.4);transform:translateY(-2px);background:rgba(30,41,59,0.7);}
+.loader{border:3px solid rgba(255,255,255,0.05);border-top:3px solid #6366f1;border-radius:50%;width:30px;height:30px;animation:spin 0.8s linear infinite;}
+@keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+#code-editor{background:#0f172a;color:#e2e8f0;caret-color:#6366f1;width:100%;height:100%;outline:none;border:none;resize:none;}
+.apply-btn{background:rgba(99,102,241,0.2);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc;padding:4px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-bottom:8px;}
+.apply-btn:hover{background:rgba(99,102,241,0.4);color:white;}
+</style>
+</head>
+<body>
+
+<!-- AUTH PAGE -->
+<div id="auth-page" class="fixed inset-0 z-[100] flex items-center justify-center bg-darkbg p-4">
+  <div class="w-full max-w-md glass p-8 rounded-2xl shadow-2xl relative z-10">
+    <div class="text-center mb-8">
+      <div class="w-16 h-16 rounded-2xl auth-gradient mx-auto flex items-center justify-center text-3xl mb-4 shadow-xl shadow-indigo-500/20">
+        <i class="fas fa-shield-halved text-white"></i>
+      </div>
+      <h2 id="auth-title" class="text-3xl font-bold mb-2">Welcome Back</h2>
+      <p id="auth-subtitle" class="text-gray-400">Please enter your details to continue</p>
+    </div>
+    <form id="auth-form" onsubmit="handleAuth(event)" class="space-y-4">
+      <input type="email" id="auth-email" required placeholder="name@company.com" class="w-full bg-slate-900/50 border border-white/10 rounded-lg px-4 py-3"/>
+      <input type="password" id="auth-password" required placeholder="••••••••" class="w-full bg-slate-900/50 border border-white/10 rounded-lg px-4 py-3"/>
+      <button type="submit" class="w-full auth-gradient py-3 rounded-lg font-bold text-white">Sign In</button>
+    </form>
+    <div class="mt-6 text-center">
+      <button onclick="toggleAuthMode()" id="auth-toggle" class="text-sm text-indigo-400 hover:text-indigo-300">Don't have an account? Create one</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="main-app" class="hidden opacity-0 transition-opacity duration-700 p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+  <!-- LEFT: CODE EDITOR -->
+  <div class="lg:col-span-5 flex flex-col gap-4 h-[700px]">
+    <div class="glass rounded-2xl overflow-hidden border border-white/5 flex flex-col h-full">
+      <div class="bg-black/30 px-5 py-3 flex justify-between border-b border-white/5">
+        <select id="language-select" class="bg-slate-800 text-xs px-3 py-1.5 rounded-lg border border-white/10">
+          <option value="python">Python</option>
+          <option value="c">C</option>
+          <option value="cpp">C++</option>
+          <option value="java">Java</option>
+          <option value="javascript">JavaScript</option>
+        </select>
+      </div>
+      <textarea id="code-editor" spellcheck="false" placeholder="// Write or paste your code here..."></textarea>
+      <div class="p-4 bg-black/20 border-t border-white/5">
+        <button onclick="triggerAnalysis()" class="w-full auth-gradient py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2">
+          <i class="fas fa-wand-magic-sparkles"></i> Run Deep Analysis
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: OUTPUT -->
+  <div class="lg:col-span-7 flex flex-col gap-4">
+    <div class="glass rounded-2xl border border-white/5 flex flex-col h-[520px] relative overflow-hidden">
+      <div id="output-header" class="px-6 py-4 border-b border-white/5 bg-black/20 flex justify-between items-center">
+        <h3 class="text-sm font-semibold flex items-center gap-2"><i class="fas fa-terminal text-indigo-400"></i> Analysis Dashboard</h3>
+        <div id="status-indicator" class="text-[10px] text-gray-500 italic">Awaiting Input...</div>
+      </div>
+      <div id="output-content" class="flex-1 p-6 overflow-y-auto">
+        <div id="empty-prompt" class="h-full flex flex-col items-center justify-center text-gray-500 space-y-4">
+          <div class="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center text-3xl">
+            <i class="fas fa-code-merge opacity-20"></i>
+          </div>
+          <p class="text-sm max-w-xs text-center">Your code analysis will appear here.</p>
+        </div>
+        <div id="loading-state" class="hidden h-full flex flex-col items-center justify-center space-y-4">
+          <div class="loader"></div>
+          <p id="loading-text" class="text-sm font-medium animate-pulse text-indigo-300">Scanning logic...</p>
+        </div>
+        <div id="dynamic-output" class="hidden space-y-4"></div>
+      </div>
+    </div>
+
+    <!-- ACTION BUTTONS -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+      <button onclick="requestAction('fix_bugs')" class="glass-card p-4 flex flex-col items-center gap-2">
+        <i class="fas fa-bug text-emerald-400"></i> Fix Bugs
+      </button>
+      <button onclick="requestAction('optimize')" class="glass-card p-4 flex flex-col items-center gap-2">
+        <i class="fas fa-bolt text-amber-400"></i> Optimize
+      </button>
+      <button onclick="requestAction('suggestions')" class="glass-card p-4 flex flex-col items-center gap-2">
+        <i class="fas fa-lightbulb text-indigo-400"></i> Suggestions
+      </button>
+      <button onclick="requestAction('time_complexity')" class="glass-card p-4 flex flex-col items-center gap-2">
+        <i class="fas fa-clock text-rose-400"></i> Time O
+      </button>
+      <button onclick="requestAction('space_complexity')" class="glass-card p-4 flex flex-col items-center gap-2">
+        <i class="fas fa-memory text-cyan-400"></i> Space O
+      </button>
+      <button onclick="requestAction('approaches')" class="glass-card p-4 flex flex-col items-center gap-2">
+        <i class="fas fa-diagram-project text-purple-400"></i> Alt Ideas
+      </button>
+      <button onclick="requestAction('explain')" class="glass-card p-4 flex flex-col items-center gap-2">
+        <i class="fas fa-brain text-pink-400"></i> ELI5
+      </button>
+      <button onclick="toggleConvertUI()" class="glass-card p-4 flex flex-col items-center gap-2">
+        <i class="fas fa-repeat text-orange-400"></i> Convert
+      </button>
+    </div>
+
+    <!-- CONVERT OPTIONS -->
+    <div id="convert-options" class="hidden glass p-4 rounded-xl mt-3 flex items-center justify-between">
+      <select id="target-language-select" class="bg-indigo-900/40 text-xs px-3 py-1.5 rounded-lg border border-indigo-500/30 text-white">
+        <option value="python">Python</option>
+        <option value="c">C</option>
+        <option value="cpp">C++</option>
+        <option value="java">Java</option>
+        <option value="javascript">JavaScript</option>
+        <option value="rust">Rust</option>
+      </select>
+      <button onclick="requestAction('convert')" class="auth-gradient px-4 py-1.5 rounded-lg text-[10px] font-bold">Convert Now</button>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+let isSignup=false,currentUser=null;
+function toggleAuthMode(){isSignup=!isSignup;document.getElementById('auth-title').innerText=isSignup?'Create Account':'Welcome Back';document.getElementById('auth-toggle').innerText=isSignup?'Already have an account? Sign In':"Don't have an account? Create one";}
+function handleAuth(e){e.preventDefault();currentUser={email:document.getElementById('auth-email').value};document.getElementById('auth-page').style.display='none';const mainApp=document.getElementById('main-app');mainApp.classList.remove('hidden');setTimeout(()=>mainApp.classList.add('opacity-100'),50);}
+function logout(){window.location.reload();}
+function toggleConvertUI(){document.getElementById('convert-options').classList.toggle('hidden');}
+
+// GEMINI API
+async function callGeminiAPI(code, lang, action, targetLang = null) {
+  const res = await fetch('/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, lang, action, targetLang })
+  });
+
+  const data = await res.json();
+
+  if (data.error) {
+    return `<p class="text-red-400">${data.error}</p>`;
+  }
+
+  return data.output?.replace(/```html|```/gi, '').trim() || '';
+}
+
+// RUN ANALYSIS
+async function triggerAnalysis(){const code=document.getElementById('code-editor').value;if(!code.trim()) return;await executeTask('analyze','Deep Scanning Code Structure...');}
+
+// EXECUTE TASK
+async function executeTask(action,msg,targetLang=null){
+  const empty=document.getElementById('empty-prompt');
+  const loader=document.getElementById('loading-state');
+  const dynamic=document.getElementById('dynamic-output');
+  const status=document.getElementById('status-indicator');
+  const code=document.getElementById('code-editor').value;
+  const lang=document.getElementById('language-select').value;
+  if(empty) empty.classList.add('hidden');
+  dynamic.classList.add('hidden');
+  document.getElementById('loading-text').innerText=msg;
+  loader.classList.remove('hidden');
+  status.innerText="Processing...";
+  const result=await callGeminiAPI(code,lang,action,targetLang);
+  loader.classList.add('hidden');
+  dynamic.innerHTML=result;
+  dynamic.classList.remove('hidden');
+  status.innerText="Ready";
+  document.querySelectorAll('pre code').forEach(el=>hljs.highlightElement(el));
+}
+
+// APPLY TO EDITOR
+document.addEventListener('click',e=>{
+  const btn=e.target.closest('.apply-btn');
+  if(btn){const newCode=btn.getAttribute('data-code');const editor=document.getElementById('code-editor');if(editor&&newCode){const txt=document.createElement('textarea');txt.innerHTML=newCode;editor.value=txt.value;btn.innerHTML='<i class="fas fa-check"></i> Applied!';setTimeout(()=>{btn.innerHTML='<i class="fas fa-external-link-alt"></i> Apply to Editor';},2000);}}});
+
+// REQUEST ACTIONS
+async function requestAction(action){
+  const msgs={fix_bugs:"Fixing bugs...",optimize:"Optimizing...",suggestions:"Fetching suggestions...",time_complexity:"Calculating time complexity...",space_complexity:"Calculating space complexity...",approaches:"Generating alternatives...",explain:"Explaining in simple terms...",convert:"Converting code..."};
+  const targetLang=action==='convert'?document.getElementById('target-language-select').value:null;
+  await executeTask(action,msgs[action]||"Processing...",targetLang);
+}
+</script>
+</body>
+</html>
